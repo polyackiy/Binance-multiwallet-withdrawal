@@ -1,22 +1,31 @@
 import axios from "axios";
 import fs from 'fs';
-import { config } from './config.js'
+import {config} from './config.js'
 import crypto from 'node:crypto';
-import _ from "lodash"
+import _ from 'lodash'
+import os from 'os'
 
-let txStatuses = { 0: "Email Sent", 1: "Cancelled", 2: "Awaiting Approval", 3: "Rejected", 4: "Processing", 5: "Failure", 6: "Completed" };
+let txStatuses = {
+    0: "Email Sent",
+    1: "Cancelled",
+    2: "Awaiting Approval",
+    3: "Rejected",
+    4: "Processing",
+    5: "Failure",
+    6: "Completed"
+};
 const timeout = ms => new Promise(res => setTimeout(res, ms));
 const sign = query_string => crypto.createHmac('sha256', config.secret).update(query_string).digest('hex');
 
 
 function parseFile(file) {
     let data = fs.readFileSync(file, "utf8");
-    let array = data.split('\r\n');
+    let array = data.split(os.EOL);
     let wallets = [];
 
     array.forEach(wallet => {
         if (wallet.length > 3) {
-            wallets.push(wallet)
+            wallets.push(wallet.trim())
         }
     })
 
@@ -32,7 +41,7 @@ function validateWallets(array, regexp) {
     })
 
     if (invalidWallets.length > 0) {
-        console.log(`Invalid wallets: ${invalidWallets.join("\n")}`);
+        console.log(`Invalid wallets: ${invalidWallets.join(os.EOL)}`);
     } else return true
 }
 
@@ -43,7 +52,7 @@ async function getCoinInformation(coin) {
 
     let res = await axios(`https://api.binance.com/sapi/v1/capital/config/getall?${query}&signature=${signature}`, {
         method: "GET",
-        headers: { 'X-MBX-APIKEY': config.apikey }
+        headers: {'X-MBX-APIKEY': config.apikey}
     }).catch(err => console.error(err.response.data.msg))
 
     return res.data.find(query => query.coin === coin)
@@ -56,7 +65,7 @@ async function getTransactionInfo(coin, txid) {
 
     let res = await axios(`https://api.binance.com/sapi/v1/capital/withdraw/history?${query}&signature=${signature}`, {
         method: "GET",
-        headers: { 'X-MBX-APIKEY': config.apikey }
+        headers: {'X-MBX-APIKEY': config.apikey}
     }).catch(err => console.error(err.response.data.msg))
 
     let tx = res.data.find(query => query.id === txid)
@@ -72,17 +81,17 @@ async function withdraw(coin, address, amount, network) {
 
     let res = await axios(`https://api.binance.com/sapi/v1/capital/withdraw/apply?${query}&signature=${signature}`, {
         method: "POST",
-        headers: { 'X-MBX-APIKEY': config.apikey }
+        headers: {'X-MBX-APIKEY': config.apikey}
     }).catch(err => console.error(err.response.data.msg))
 
     if (res?.data) {
-        await timeout(_.random(config.delay.min, config.delay.max) * 1000)
+        await timeout(5000)
         await getTransactionInfo(coin, res.data.id)
+        await timeout(_.random(config.delay.min, config.delay.max) * 1000)
 
         return res
     }
 }
-
 
 
 (async () => {
@@ -91,11 +100,11 @@ async function withdraw(coin, address, amount, network) {
     console.log(`Balance: ${coinData.free} ${coinData.coin}`);
 
     if (networks.includes(config.network.toUpperCase())) {
-        let networkData = coinData.networkList.find(item => item.network == config.network.toUpperCase());
+        let networkData = coinData.networkList.find(item => item.network === config.network.toUpperCase());
         let wallets = parseFile("wallets.txt");
         let validWallets = validateWallets(wallets, networkData.addressRegex);
         let amount = typeof (config.amount) == 'string' ? config.amount.replace('.', ',') : config.amount;
-  
+
         if (validWallets) {
             if (coinData.free >= wallets.length * amount) {
                 for (let i = 0; i < wallets.length; i++) {
