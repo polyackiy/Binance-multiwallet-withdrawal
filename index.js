@@ -86,6 +86,7 @@ async function withdraw(coin, address, amount, network) {
 
     if (res?.data) {
         await timeout(5000)
+        console.log(`Address: ${address}`)
         await getTransactionInfo(coin, res.data.id)
         await timeout(_.random(config.delay.min, config.delay.max) * 1000)
 
